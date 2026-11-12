@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LLM Wiki — 知識庫閱讀器</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Noto+Serif+TC:wght@500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" />
+  <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+  <style>
+    :root {
+      --bg: #FAF8F5;
+      --surface: #FFFFFF;
+      --surface-soft: #F3EFE8;
+      --text: #2C2A29;
+      --text-muted: #6E6962;
+      --accent: #5B7065;
+      --accent-warm: #A67B5B;
+      --border: #E5E0D8;
+      --shadow: 0 4px 20px rgba(44, 42, 41, 0.04);
+      --radius: 12px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: "Noto Sans TC", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.8;
+      display: flex;
+      min-height: 100vh;
+    }
+
+    /* Sidebar */
+    .sidebar {
+      width: 300px;
+      flex-shrink: 0;
+      background: var(--surface-soft);
+      border-right: 1px solid var(--border);
+      padding: 28px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+    }
+
+    .brand {
+      padding-bottom: 14px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .brand-tag {
+      display: inline-block;
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--accent);
+      background: rgba(91, 112, 101, 0.12);
+      padding: 2px 8px;
+      border-radius: 999px;
+      margin-bottom: 6px;
+    }
+
+    .brand h1 {
+      margin: 0;
+      font-family: "Noto Serif TC", serif;
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: 0.02em;
+    }
+
+    .search-box {
+      width: 100%;
+      padding: 9px 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface);
+      color: var(--text);
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .search-box:focus {
+      border-color: var(--accent);
+    }
+
+    .nav-group-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text-muted);
+      letter-spacing: 0.05em;
+      margin: 10px 0 6px;
+      padding-left: 6px;
+    }
+
+    .nav-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .nav-link {
+      display: block;
+      padding: 7px 10px;
+      border-radius: 8px;
+      color: var(--text);
+      text-decoration: none;
+      font-size: 14px;
+      line-height: 1.45;
+      transition: background 0.15s, color 0.15s;
+      cursor: pointer;
+    }
+
+    .nav-link:hover {
+      background: rgba(91, 112, 101, 0.09);
+    }
+
+    .nav-link.active {
+      background: var(--accent);
+      color: #FFFFFF;
+      font-weight: 500;
+    }
+
+    /* Main Content */
+    .main {
+      flex: 1;
+      min-width: 0;
+      padding: 44px 48px 80px;
+      max-width: 920px;
+      margin: 0 auto;
+    }
+
+    .mobile-bar {
+      display: none;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 18px;
+      background: var(--surface-soft);
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      z-index: 20;
+    }
+
+    .menu-btn {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 6px 12px;
+      font-size: 14px;
+      color: var(--text);
+      cursor: pointer;
+    }
+
+    .frontmatter-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px 22px;
+      margin-bottom: 28px;
+      box-shadow: var(--shadow);
+    }
+
+    .fm-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 500;
+      background: rgba(91, 112, 101, 0.12);
+      color: var(--accent);
+    }
+
+    .badge.warm {
+      background: rgba(166, 123, 91, 0.14);
+      color: var(--accent-warm);
+    }
+
+    .article-body {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 36px 42px;
+      box-shadow: var(--shadow);
+    }
+
+    .article-body h1,
+    .article-body h2,
+    .article-body h3 {
+      font-family: "Noto Serif TC", serif;
+      color: var(--text);
+      margin-top: 1.6em;
+      margin-bottom: 0.6em;
+      line-height: 1.4;
+    }
+
+    .article-body h1:first-child {
+      margin-top: 0;
+      font-size: 28px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 14px;
+    }
+
+    .article-body h2 {
+      font-size: 21px;
+      border-left: 3px solid var(--accent);
+      padding-left: 12px;
+    }
+
+    .article-body a {
+      color: var(--accent);
+      text-decoration: underline;
+      text-underline-offset: 3px;
+    }
+
+    .article-body a.wikilink {
+      color: var(--accent-warm);
+      font-weight: 500;
+      text-decoration: none;
+      border-bottom: 1px dashed var(--accent-warm);
+    }
+
+    .article-body a.wikilink:hover {
+      background: rgba(166, 123, 91, 0.1);
+    }
+
+    .article-body table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 18px 0;
+      font-size: 14.5px;
+      display: block;
+      overflow-x: auto;
+    }
+
+    .article-body th,
+    .article-body td {
+      border: 1px solid var(--border);
+      padding: 10px 14px;
+      text-align: left;
+    }
+
+    .article-body th {
+      background: var(--surface-soft);
+      font-weight: 700;
+    }
+
+    .article-body blockquote {
+      margin: 18px 0;
+      padding: 12px 18px;
+      background: var(--surface-soft);
+      border-left: 3px solid var(--accent-warm);
+      border-radius: 0 8px 8px 0;
+      color: var(--text);
+    }
+
+    .article-body code {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 0.88em;
+      background: var(--surface-soft);
+      padding: 2px 6px;
+      border-radius: 5px;
+    }
+
+    .article-body pre {
+      background: #2C2A29;
+      color: #FAF8F5;
+      padding: 16px 18px;
+      border-radius: 8px;
+      overflow-x: auto;
+    }
+
+    .article-body pre code {
+      background: none;
+      color: inherit;
+      padding: 0;
+    }
+
+    .notice {
+      background: rgba(166, 123, 91, 0.12);
+      border: 1px solid rgba(166, 123, 91, 0.35);
+      border-radius: var(--radius);
+      padding: 16px 20px;
+      margin-bottom: 20px;
+      font-size: 14px;
+    }
+
+    @media (max-width: 860px) {
+      body { flex-direction: column; }
+      .mobile-bar { display: flex; }
+      .sidebar {
+        display: none;
+        position: fixed;
+        inset: 0 auto 0 0;
+        z-index: 30;
+        width: 280px;
+        box-shadow: 4px 0 24px rgba(0,0,0,0.12);
+      }
+      .sidebar.open { display: flex; }
+      .main { padding: 24px 18px 60px; width: 100%; }
+      .article-body { padding: 24px 20px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="mobile-bar">
+    <span style="font-family: 'Noto Serif TC', serif; font-weight: 700;">LLM Wiki</span>
+    <button class="menu-btn" onclick="document.getElementById('sidebar').classList.toggle('open')">目錄選單</button>
+  </div>
+
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <div class="brand-tag">Serene Knowledge Base</div>
+      <h1>LLM Wiki 知識庫</h1>
+    </div>
+    <input type="text" id="searchInput" class="search-box" placeholder="搜尋頁面標題或檔名..." />
+    <div id="navContainer"></div>
+  </aside>
+
+  <main class="main">
+    <div id="localNotice" class="notice" style="display:none;">
+      <strong>提示：</strong>你目前是直接以本機檔案（<code>file://</code>）開啟，瀏覽器基於安全限制會阻擋自動讀取同資料夾的 <code>.md</code> 檔。請透過 <strong>GitHub Pages</strong> 網址開啟，或在本機資料夾執行 <code>python3 -m http.server</code> 後瀏覽。
+    </div>
+    <div id="frontmatterContainer"></div>
+    <article id="articleContainer" class="article-body">
+      <p>載入知識庫中⋯⋯</p>
+    </article>
+  </main>
+
+  <script>
+    const defaultPages = [
+      { group: "核心導航", id: "index", title: "Wiki 總目錄（Index）" },
+      { group: "核心導航", id: "overview", title: "領域動態總覽（Overview）" },
+      { group: "核心導航", id: "log", title: "操作日誌（Log）" },
+      { group: "核心導航", id: "AGENTS", title: "操作手冊（AGENTS.md）" }
+    ];
+
+    let allPages = [...defaultPages];
+
+    function parseFrontmatter(md) {
+      const match = md.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)$/);
+      if (!match) return { meta: null, body: md };
+      const rawYaml = match[1];
+      const body = match[2];
+      const meta = {};
+      let currentKey = null;
+      for (const line of rawYaml.split(/\r?\n/)) {
+        const listMatch = line.match(/^\s*-\s+(.*)$/);
+        if (listMatch && currentKey) {
+          if (!Array.isArray(meta[currentKey])) meta[currentKey] = [];
+          meta[currentKey].push(listMatch[1].replace(/^["']|["']$/g, ""));
+          continue;
+        }
+        const kv = line.match(/^([a-zA-Z0-9_-]+):\s*(.*)$/);
+        if (kv) {
+          currentKey = kv[1];
+          const val = kv[2].trim().replace(/^["']|["']$/g, "");
+          meta[currentKey] = val === "[]" ? [] : val;
+        }
+      }
+      return { meta, body };
+    }
+
+    function replaceWikilinks(md) {
+      return md.replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_, target, label) => {
+        const cleanTarget = target.trim().replace(/\.md$/, "");
+        const display = (label || cleanTarget).trim();
+        return `<a class="wikilink" href="#${encodeURIComponent(cleanTarget)}">${display}</a>`;
+      });
+    }
+
+    function renderFrontmatter(meta) {
+      const container = document.getElementById("frontmatterContainer");
+      if (!meta) {
+        container.innerHTML = "";
+        return;
+      }
+      const tags = Array.isArray(meta.tags)
+        ? meta.tags.map(t => `<span class="badge warm">#${t}</span>`).join("")
+        : "";
+      const typeBadge = meta.type ? `<span class="badge">${meta.type}</span>` : "";
+      const dateText = meta.updated ? `更新：${meta.updated}` : (meta.date ? `建立：${meta.date}` : "");
+      container.innerHTML = `
+        <div class="frontmatter-card">
+          <div class="fm-meta">
+            ${typeBadge}
+            ${dateText ? `<span>${dateText}</span>` : ""}
+            ${tags}
+          </div>
+        </div>
+      `;
+    }
+
+    async function loadIndexPages() {
+      try {
+        const res = await fetch("./index.md");
+        if (!res.ok) return;
+        const text = await res.text();
+        let currentGroup = "收錄頁面";
+        const discovered = [];
+        for (const line of text.split(/\r?\n/)) {
+          const h2 = line.match(/^##\s+(.+)$/);
+          if (h2) {
+            currentGroup = h2[1].replace(/（.*?）/g, "").trim();
+            continue;
+          }
+          const linkMatch = line.match(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/);
+          if (linkMatch) {
+            const id = linkMatch[1].trim().replace(/\.md$/, "");
+            const title = (linkMatch[2] || id).trim();
+            if (!defaultPages.some(p => p.id === id) && !discovered.some(p => p.id === id)) {
+              discovered.push({ group: currentGroup, id, title });
+            }
+          }
+        }
+        allPages = [...defaultPages, ...discovered];
+      } catch (e) {
+        // Fallback to defaults
+      }
+    }
+
+    function renderNav(filter = "") {
+      const nav = document.getElementById("navContainer");
+      const currentId = decodeURIComponent(location.hash.slice(1) || "index");
+      const q = filter.trim().toLowerCase();
+      const filtered = allPages.filter(p =>
+        !q || p.title.toLowerCase().includes(q) || p.id.toLowerCase().includes(q)
+      );
+
+      const groups = {};
+      for (const item of filtered) {
+        if (!groups[item.group]) groups[item.group] = [];
+        groups[item.group].push(item);
+      }
+
+      nav.innerHTML = Object.entries(groups).map(([group, items]) => `
+        <div class="nav-group-title">${group}</div>
+        <ul class="nav-list">
+          ${items.map(item => `
+            <li>
+              <a class="nav-link ${item.id === currentId ? "active" : ""}" href="#${encodeURIComponent(item.id)}">
+                ${item.title}
+              </a>
+            </li>
+          `).join("")}
+        </ul>
+      `).join("");
+    }
+
+    async function loadPage(pageId) {
+      const cleanId = pageId.replace(/\.md$/, "");
+      const article = document.getElementById("articleContainer");
+      try {
+        const res = await fetch(`./${cleanId}.md`);
+        if (!res.ok) throw new Error("Not found");
+        const raw = await res.text();
+        const { meta, body } = parseFrontmatter(raw);
+        renderFrontmatter(meta);
+        const withLinks = replaceWikilinks(body);
+        article.innerHTML = marked.parse(withLinks);
+
+        if (window.renderMathInElement) {
+          renderMathInElement(article, {
+            delimiters: [
+              { left: "$$", right: "$$", display: true },
+              { left: "$", right: "$", display: false }
+            ],
+            throwOnError: false
+          });
+        }
+        document.title = `${(meta && meta.title) || cleanId} — LLM Wiki`;
+      } catch (err) {
+        renderFrontmatter(null);
+        if (location.protocol === "file:") {
+          document.getElementById("localNotice").style.display = "block";
+        }
+        article.innerHTML = `<h1>找不到頁面：${cleanId}.md</h1><p>請確認該檔案存在於同一資料夾中，或回到 <a href="#index">Wiki 總目錄</a>。</p>`;
+      }
+      renderNav(document.getElementById("searchInput").value);
+      document.getElementById("sidebar").classList.remove("open");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+
+    window.addEventListener("hashchange", () => {
+      loadPage(decodeURIComponent(location.hash.slice(1) || "index"));
+    });
+
+    document.getElementById("searchInput").addEventListener("input", (e) => {
+      renderNav(e.target.value);
+    });
+
+    (async () => {
+      if (location.protocol === "file:") {
+        document.getElementById("localNotice").style.display = "block";
+      }
+      await loadIndexPages();
+      const initial = decodeURIComponent(location.hash.slice(1) || "index");
+      await loadPage(initial);
+    })();
+  </script>
+</body>
+</html>
